@@ -15,8 +15,10 @@ HTML = """
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <title>استخراج النص العربي من يوتيوب</title>
+
 <style>
 *{box-sizing:border-box}
+
 body{
   margin:0;
   padding:16px;
@@ -24,10 +26,12 @@ body{
   font-family:Arial,sans-serif;
   color:#111827;
 }
+
 .container{
   max-width:1100px;
   margin:auto;
 }
+
 .box{
   background:#fff;
   border-radius:18px;
@@ -35,17 +39,21 @@ body{
   margin-bottom:18px;
   box-shadow:0 2px 10px rgba(0,0,0,.08);
 }
+
 h1,h2,h3{margin-top:0}
+
 h1{
   font-size:clamp(28px,5vw,44px);
   line-height:1.3;
   margin-bottom:10px;
 }
+
 .note{
   color:#6b7280;
   font-size:14px;
   margin-bottom:14px;
 }
+
 input[type=text]{
   width:100%;
   padding:14px;
@@ -56,12 +64,14 @@ input[type=text]{
   direction:ltr;
   text-align:left;
 }
+
 .row{
   display:flex;
   flex-wrap:wrap;
   gap:10px;
   margin-bottom:10px;
 }
+
 button{
   border:none;
   border-radius:14px;
@@ -70,12 +80,15 @@ button{
   cursor:pointer;
   color:white;
 }
+
 .btn-blue{background:#2563eb}
 .btn-green{background:#047857}
 .btn-dark{background:#111827}
 .btn-gray{background:#374151}
 .btn-red{background:#b91c1c}
+
 button:active{transform:scale(.98)}
+
 .status{
   background:#eef2ff;
   color:#312e81;
@@ -86,12 +99,14 @@ button:active{transform:scale(.98)}
   line-height:1.7;
   font-size:16px;
 }
+
 label{
   display:block;
   margin-bottom:8px;
   font-weight:bold;
   font-size:19px;
 }
+
 textarea{
   width:100%;
   min-height:260px;
@@ -103,12 +118,14 @@ textarea{
   resize:vertical;
   background:#fafafa;
 }
+
 .small-actions{
   display:flex;
   flex-wrap:wrap;
   gap:8px;
   margin-bottom:10px;
 }
+
 .copy-overlay{
   position:fixed;
   inset:0;
@@ -119,6 +136,7 @@ textarea{
   z-index:9999;
   padding:14px;
 }
+
 .copy-panel{
   width:min(900px, 100%);
   background:#fff;
@@ -126,17 +144,20 @@ textarea{
   padding:16px;
   box-shadow:0 8px 30px rgba(0,0,0,.2);
 }
+
 .copy-title{
   font-size:22px;
   font-weight:bold;
   margin-bottom:8px;
 }
+
 .copy-help{
   color:#4b5563;
   font-size:14px;
   line-height:1.8;
   margin-bottom:10px;
 }
+
 .copy-box{
   width:100%;
   min-height:300px;
@@ -148,12 +169,14 @@ textarea{
   resize:vertical;
   background:#fafafa;
 }
+
 .copy-actions{
   display:flex;
   flex-wrap:wrap;
   gap:8px;
   margin-top:12px;
 }
+
 @media (max-width:700px){
   body{padding:12px}
   .box{padding:14px;border-radius:16px}
@@ -169,7 +192,7 @@ textarea{
 
   <div class="box">
     <h1>استخراج النص العربي من يوتيوب</h1>
-    <div class="note">ضع رابط الفيديو، ثم استخرج النص. الملخص وأهم النقاط يظهران في مربعات مستقلة.</div>
+    <div class="note">ضع رابط الفيديو ثم استخرج النص. الملخص وأهم النقاط يظهران في مربعات مستقلة.</div>
 
     <input id="url" type="text" placeholder="ضع رابط يوتيوب هنا">
 
@@ -454,8 +477,10 @@ function clearAllData(){
 </html>
 """
 
+
 def extract_video_id(url: str):
     url = url.strip()
+
     try:
         parsed = urlparse(url)
 
@@ -466,6 +491,7 @@ def extract_video_id(url: str):
 
         if "youtube.com" in parsed.netloc or "www.youtube.com" in parsed.netloc or "m.youtube.com" in parsed.netloc:
             qs = parse_qs(parsed.query)
+
             if "v" in qs:
                 video_id = qs["v"][0]
                 if len(video_id) == 11:
@@ -494,24 +520,30 @@ def extract_video_id(url: str):
 
     return None
 
+
 def normalize_spaces(text: str) -> str:
-    text = text.replace("\\u200f", " ").replace("\\u200e", " ")
-    text = re.sub(r"\\s+", " ", text)
+    text = text.replace("\u200f", " ").replace("\u200e", " ")
+    text = re.sub(r"\s+", " ", text)
     return text.strip()
+
 
 def split_into_word_chunks(text: str, words_per_chunk: int = 45):
     words = text.split()
     chunks = []
+
     for i in range(0, len(words), words_per_chunk):
         chunk = " ".join(words[i:i + words_per_chunk]).strip()
         if chunk:
             chunks.append(chunk)
+
     return chunks
+
 
 def format_text_readable(text: str, words_per_paragraph: int = 45) -> str:
     text = normalize_spaces(text)
     chunks = split_into_word_chunks(text, words_per_paragraph)
-    return "\\n\\n".join(chunks)
+    return "\n\n".join(chunks)
+
 
 def get_word_frequencies(text: str):
     stop_words = {
@@ -524,7 +556,7 @@ def get_word_frequencies(text: str):
         "له", "منه", "منها", "انه", "إنه", "أنها", "انها"
     }
 
-    words = re.findall(r"[\\u0600-\\u06FFA-Za-z0-9_]+", text)
+    words = re.findall(r"[\u0600-\u06FFA-Za-z0-9_]+", text)
     cleaned = []
 
     for w in words:
@@ -536,6 +568,7 @@ def get_word_frequencies(text: str):
 
     return Counter(cleaned)
 
+
 def summarize_by_chunks(text: str, max_chunks: int = 8, chunk_size: int = 55) -> str:
     text = normalize_spaces(text)
     chunks = split_into_word_chunks(text, chunk_size)
@@ -544,16 +577,17 @@ def summarize_by_chunks(text: str, max_chunks: int = 8, chunk_size: int = 55) ->
         return ""
 
     if len(chunks) <= max_chunks:
-        return "\\n\\n".join(chunks)
+        return "\n\n".join(chunks)
 
     freqs = get_word_frequencies(text)
     if not freqs:
-        return "\\n\\n".join(chunks[:max_chunks])
+        return "\n\n".join(chunks[:max_chunks])
 
     scored = []
+
     for idx, chunk in enumerate(chunks):
         score = 0
-        words = re.findall(r"[\\u0600-\\u06FFA-Za-z0-9_]+", chunk)
+        words = re.findall(r"[\u0600-\u06FFA-Za-z0-9_]+", chunk)
         for w in words:
             score += freqs.get(w, 0)
 
@@ -571,7 +605,8 @@ def summarize_by_chunks(text: str, max_chunks: int = 8, chunk_size: int = 55) ->
     selected = scored[:max_chunks]
     selected.sort(key=lambda x: x[1])
 
-    return "\\n\\n".join(item[2] for item in selected)
+    return "\n\n".join(item[2] for item in selected)
+
 
 def extract_key_points(text: str, points_count: int = 8, chunk_size: int = 28) -> str:
     text = normalize_spaces(text)
@@ -585,7 +620,7 @@ def extract_key_points(text: str, points_count: int = 8, chunk_size: int = 28) -
 
     for idx, chunk in enumerate(chunks):
         score = 0
-        words = re.findall(r"[\\u0600-\\u06FFA-Za-z0-9_]+", chunk)
+        words = re.findall(r"[\u0600-\u06FFA-Za-z0-9_]+", chunk)
         for w in words:
             score += freqs.get(w, 0)
         scored.append((score, idx, chunk))
@@ -598,10 +633,12 @@ def extract_key_points(text: str, points_count: int = 8, chunk_size: int = 28) -
     for i, item in enumerate(selected, 1):
         lines.append(f"{i}- {item[2]}")
 
-    return "\\n\\n".join(lines)
+    return "\n\n".join(lines)
+
 
 def clean_text_from_transcript(transcript_items) -> str:
     parts = []
+
     for item in transcript_items:
         try:
             t = item.text.strip()
@@ -612,14 +649,17 @@ def clean_text_from_transcript(transcript_items) -> str:
             continue
         if t in ("[Music]", "[موسيقى]"):
             continue
+
         parts.append(t)
 
     text = " ".join(parts)
     return normalize_spaces(text)
 
+
 @app.get("/")
 def index():
     return render_template_string(HTML)
+
 
 @app.post("/extract")
 def extract():
@@ -643,8 +683,10 @@ def extract():
 
         pretty = format_text_readable(text, words_per_paragraph=45)
         return jsonify({"ok": True, "text": pretty})
+
     except Exception as e:
         return jsonify({"ok": False, "error": str(e)})
+
 
 @app.post("/format")
 def format_route():
@@ -657,8 +699,10 @@ def format_route():
 
         result = format_text_readable(text, words_per_paragraph=45)
         return jsonify({"ok": True, "text": result})
+
     except Exception as e:
         return jsonify({"ok": False, "error": str(e)})
+
 
 @app.post("/summarize")
 def summarize_route():
@@ -670,11 +714,13 @@ def summarize_route():
             return jsonify({"ok": False, "error": "لا يوجد نص لتلخيصه"})
 
         summary = summarize_by_chunks(text, max_chunks=8, chunk_size=55)
-        summary = "ملخص النص:\\n\\n" + format_text_readable(summary, words_per_paragraph=35)
+        summary = "ملخص النص:\n\n" + format_text_readable(summary, words_per_paragraph=35)
 
         return jsonify({"ok": True, "summary": summary})
+
     except Exception as e:
         return jsonify({"ok": False, "error": str(e)})
+
 
 @app.post("/points")
 def points_route():
@@ -686,15 +732,18 @@ def points_route():
             return jsonify({"ok": False, "error": "لا يوجد نص لاستخراج النقاط"})
 
         points = extract_key_points(text, points_count=8, chunk_size=28)
-        points = "أهم النقاط:\\n\\n" + points
+        points = "أهم النقاط:\n\n" + points
 
         return jsonify({"ok": True, "points": points})
+
     except Exception as e:
         return jsonify({"ok": False, "error": str(e)})
+
 
 @app.get("/health")
 def health():
     return {"ok": True, "status": "healthy"}
+
 
 if __name__ == "__main__":
     port = int(os.environ.get("PORT", 5000))
