@@ -17,7 +17,9 @@ HTML = """
 <title>استخراج النص العربي من يوتيوب</title>
 
 <style>
-*{box-sizing:border-box}
+*{
+  box-sizing:border-box;
+}
 
 body{
   margin:0;
@@ -33,14 +35,16 @@ body{
 }
 
 .box{
-  background:#fff;
+  background:#ffffff;
   border-radius:18px;
   padding:18px;
   margin-bottom:18px;
   box-shadow:0 2px 10px rgba(0,0,0,.08);
 }
 
-h1,h2,h3{margin-top:0}
+h1,h2,h3{
+  margin-top:0;
+}
 
 h1{
   font-size:clamp(28px,5vw,44px);
@@ -81,13 +85,15 @@ button{
   color:white;
 }
 
-.btn-blue{background:#2563eb}
-.btn-green{background:#047857}
-.btn-dark{background:#111827}
-.btn-gray{background:#374151}
-.btn-red{background:#b91c1c}
+.btn-blue{ background:#2563eb; }
+.btn-green{ background:#047857; }
+.btn-dark{ background:#111827; }
+.btn-gray{ background:#374151; }
+.btn-red{ background:#b91c1c; }
 
-button:active{transform:scale(.98)}
+button:active{
+  transform:scale(.98);
+}
 
 .status{
   background:#eef2ff;
@@ -98,7 +104,6 @@ button:active{transform:scale(.98)}
   min-height:46px;
   line-height:1.7;
   font-size:16px;
-  white-space:pre-wrap;
 }
 
 label{
@@ -179,11 +184,29 @@ textarea{
 }
 
 @media (max-width:700px){
-  body{padding:12px}
-  .box{padding:14px;border-radius:16px}
-  button{font-size:16px;padding:12px 14px}
-  textarea{font-size:17px;min-height:220px}
-  .copy-box{min-height:240px;font-size:17px}
+  body{
+    padding:12px;
+  }
+
+  .box{
+    padding:14px;
+    border-radius:16px;
+  }
+
+  button{
+    font-size:16px;
+    padding:12px 14px;
+  }
+
+  textarea{
+    font-size:17px;
+    min-height:220px;
+  }
+
+  .copy-box{
+    min-height:240px;
+    font-size:17px;
+  }
 }
 </style>
 </head>
@@ -193,7 +216,7 @@ textarea{
 
   <div class="box">
     <h1>استخراج النص العربي من يوتيوب</h1>
-    <div class="note">ضع رابط الفيديو ثم استخرج النص. الملخص وأهم النقاط يظهران في مربعات مستقلة.</div>
+    <div class="note">ضع رابط الفيديو، ثم استخرج النص. الملخص وأهم النقاط يظهران في مربعات مستقلة.</div>
 
     <input id="url" type="text" placeholder="ضع رابط يوتيوب هنا">
 
@@ -241,7 +264,8 @@ textarea{
   <div class="copy-panel">
     <div id="copyTitle" class="copy-title">نسخ النص</div>
     <div class="copy-help">
-      على الآيفون قد لا يعمل النسخ التلقائي دائمًا. اضغط داخل المربع ضغطًا مطولًا ثم اختر تحديد الكل ثم نسخ.
+      على الآيفون قد لا يعمل النسخ التلقائي داخل الصفحة المحلية.
+      اضغط داخل المربع ضغطًا مطولًا ثم اختر <b>تحديد الكل</b> ثم <b>نسخ</b>.
     </div>
     <textarea id="copyBox" class="copy-box"></textarea>
     <div class="copy-actions">
@@ -344,6 +368,7 @@ function downloadBox(id, filename){
 
 async function extractText(){
   const url = document.getElementById("url").value.trim();
+
   if(!url){
     setStatus("ضع رابط يوتيوب أولًا");
     return;
@@ -370,12 +395,13 @@ async function extractText(){
     document.getElementById("pointsBox").value = "";
     setStatus("تم استخراج النص بنجاح");
   }catch(e){
-    setStatus("تعذر الاتصال بالخادم");
+    setStatus("تعذر الاتصال بالسيرفر");
   }
 }
 
 async function formatMainText(){
   const text = document.getElementById("mainText").value.trim();
+
   if(!text){
     setStatus("لا يوجد نص لترتيبه");
     return;
@@ -406,6 +432,7 @@ async function formatMainText(){
 
 async function makeSummary(){
   const text = document.getElementById("mainText").value.trim();
+
   if(!text){
     setStatus("لا يوجد نص لتلخيصه");
     return;
@@ -436,6 +463,7 @@ async function makeSummary(){
 
 async function makePoints(){
   const text = document.getElementById("mainText").value.trim();
+
   if(!text){
     setStatus("لا يوجد نص لاستخراج النقاط");
     return;
@@ -490,9 +518,8 @@ def extract_video_id(url: str):
             if len(video_id) == 11:
                 return video_id
 
-        if "youtube.com" in parsed.netloc or "www.youtube.com" in parsed.netloc or "m.youtube.com" in parsed.netloc:
+        if "youtube.com" in parsed.netloc or "www.youtube.com" in parsed.netloc:
             qs = parse_qs(parsed.query)
-
             if "v" in qs:
                 video_id = qs["v"][0]
                 if len(video_id) == 11:
@@ -503,6 +530,7 @@ def extract_video_id(url: str):
                 video_id = parts[1]
                 if len(video_id) == 11:
                     return video_id
+
     except Exception:
         pass
 
@@ -581,6 +609,7 @@ def summarize_by_chunks(text: str, max_chunks: int = 8, chunk_size: int = 55) ->
         return "\n\n".join(chunks)
 
     freqs = get_word_frequencies(text)
+
     if not freqs:
         return "\n\n".join(chunks[:max_chunks])
 
@@ -637,17 +666,14 @@ def extract_key_points(text: str, points_count: int = 8, chunk_size: int = 28) -
     return "\n\n".join(lines)
 
 
-def clean_text_from_transcript_items(items) -> str:
+def clean_text_from_transcript(transcript_items) -> str:
     parts = []
 
-    for item in items:
-        if isinstance(item, dict):
-            t = str(item.get("text", "")).strip()
-        else:
-            try:
-                t = item.text.strip()
-            except Exception:
-                t = str(item).strip()
+    for item in transcript_items:
+        try:
+            t = item.text.strip()
+        except Exception:
+            t = str(item).strip()
 
         if not t:
             continue
@@ -656,35 +682,16 @@ def clean_text_from_transcript_items(items) -> str:
 
         parts.append(t)
 
-    return normalize_spaces(" ".join(parts))
+    text = " ".join(parts)
+    return normalize_spaces(text)
 
 
-def fetch_transcript_fallback(video_id: str):
-    api = YouTubeTranscriptApi()
-
-    errors = []
-
-    try:
-        transcript = api.fetch(video_id, languages=["ar"])
-        return transcript
-    except Exception as e:
-        errors.append(f"المحاولة الأولى فشلت: {e}")
-
-    try:
-        transcript = YouTubeTranscriptApi.get_transcript(video_id, languages=["ar"])
-        return transcript
-    except Exception as e:
-        errors.append(f"المحاولة الثانية فشلت: {e}")
-
-    raise Exception("تعذر جلب النص من يوتيوب.\n\n" + "\n".join(errors))
-
-
-@app.get("/")
+@app.route("/", methods=["GET"])
 def index():
     return render_template_string(HTML)
 
 
-@app.post("/extract")
+@app.route("/extract", methods=["POST"])
 def extract():
     try:
         data = request.get_json(force=True)
@@ -697,8 +704,9 @@ def extract():
         if not video_id:
             return jsonify({"ok": False, "error": "الرابط غير صحيح أو غير مدعوم"})
 
-        transcript = fetch_transcript_fallback(video_id)
-        text = clean_text_from_transcript_items(transcript)
+        api = YouTubeTranscriptApi()
+        transcript = api.fetch(video_id, languages=["ar"])
+        text = clean_text_from_transcript(transcript)
 
         if not text:
             return jsonify({"ok": False, "error": "تم العثور على النص لكن المحتوى فارغ"})
@@ -710,7 +718,7 @@ def extract():
         return jsonify({"ok": False, "error": str(e)})
 
 
-@app.post("/format")
+@app.route("/format", methods=["POST"])
 def format_route():
     try:
         data = request.get_json(force=True)
@@ -726,7 +734,7 @@ def format_route():
         return jsonify({"ok": False, "error": str(e)})
 
 
-@app.post("/summarize")
+@app.route("/summarize", methods=["POST"])
 def summarize_route():
     try:
         data = request.get_json(force=True)
@@ -744,7 +752,7 @@ def summarize_route():
         return jsonify({"ok": False, "error": str(e)})
 
 
-@app.post("/points")
+@app.route("/points", methods=["POST"])
 def points_route():
     try:
         data = request.get_json(force=True)
@@ -760,11 +768,6 @@ def points_route():
 
     except Exception as e:
         return jsonify({"ok": False, "error": str(e)})
-
-
-@app.get("/health")
-def health():
-    return {"ok": True, "status": "healthy"}
 
 
 if __name__ == "__main__":
