@@ -98,6 +98,7 @@ button:active{transform:scale(.98)}
   min-height:46px;
   line-height:1.7;
   font-size:16px;
+  white-space:pre-wrap;
 }
 
 label{
@@ -636,14 +637,17 @@ def extract_key_points(text: str, points_count: int = 8, chunk_size: int = 28) -
     return "\n\n".join(lines)
 
 
-def clean_text_from_transcript(transcript_items) -> str:
+def clean_text_from_transcript_items(items) -> str:
     parts = []
 
-    for item in transcript_items:
-        try:
-            t = item.text.strip()
-        except Exception:
-            t = str(item).strip()
+    for item in items:
+        if isinstance(item, dict):
+            t = str(item.get("text", "")).strip()
+        else:
+            try:
+                t = item.text.strip()
+            except Exception:
+                t = str(item).strip()
 
         if not t:
             continue
@@ -652,8 +656,27 @@ def clean_text_from_transcript(transcript_items) -> str:
 
         parts.append(t)
 
-    text = " ".join(parts)
-    return normalize_spaces(text)
+    return normalize_spaces(" ".join(parts))
+
+
+def fetch_transcript_fallback(video_id: str):
+    api = YouTubeTranscriptApi()
+
+    errors = []
+
+    try:
+        transcript = api.fetch(video_id, languages=["ar"])
+        return transcript
+    except Exception as e:
+        errors.append(f"المحاولة الأولى فشلت: {e}")
+
+    try:
+        transcript = YouTubeTranscriptApi.get_transcript(video_id, languages=["ar"])
+        return transcript
+    except Exception as e:
+        errors.append(f"المحاولة الثانية فشلت: {e}")
+
+    raise Exception("تعذر جلب النص من يوتيوب.\n\n" + "\n".join(errors))
 
 
 @app.get("/")
@@ -674,9 +697,8 @@ def extract():
         if not video_id:
             return jsonify({"ok": False, "error": "الرابط غير صحيح أو غير مدعوم"})
 
-        api = YouTubeTranscriptApi()
-        transcript = api.fetch(video_id, languages=["ar"])
-        text = clean_text_from_transcript(transcript)
+        transcript = fetch_transcript_fallback(video_id)
+        text = clean_text_from_transcript_items(transcript)
 
         if not text:
             return jsonify({"ok": False, "error": "تم العثور على النص لكن المحتوى فارغ"})
