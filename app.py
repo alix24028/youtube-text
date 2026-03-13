@@ -104,6 +104,7 @@ button:active{
   min-height:46px;
   line-height:1.7;
   font-size:16px;
+  white-space:pre-wrap;
 }
 
 label{
@@ -264,8 +265,7 @@ textarea{
   <div class="copy-panel">
     <div id="copyTitle" class="copy-title">نسخ النص</div>
     <div class="copy-help">
-      على الآيفون قد لا يعمل النسخ التلقائي داخل الصفحة المحلية.
-      اضغط داخل المربع ضغطًا مطولًا ثم اختر <b>تحديد الكل</b> ثم <b>نسخ</b>.
+      على الآيفون قد لا يعمل النسخ التلقائي دائمًا. اضغط داخل المربع ضغطًا مطولًا ثم اختر تحديد الكل ثم نسخ.
     </div>
     <textarea id="copyBox" class="copy-box"></textarea>
     <div class="copy-actions">
@@ -395,7 +395,7 @@ async function extractText(){
     document.getElementById("pointsBox").value = "";
     setStatus("تم استخراج النص بنجاح");
   }catch(e){
-    setStatus("تعذر الاتصال بالسيرفر");
+    setStatus("تعذر الاتصال بالخادم");
   }
 }
 
@@ -518,7 +518,7 @@ def extract_video_id(url: str):
             if len(video_id) == 11:
                 return video_id
 
-        if "youtube.com" in parsed.netloc or "www.youtube.com" in parsed.netloc:
+        if "youtube.com" in parsed.netloc or "www.youtube.com" in parsed.netloc or "m.youtube.com" in parsed.netloc:
             qs = parse_qs(parsed.query)
             if "v" in qs:
                 video_id = qs["v"][0]
@@ -670,10 +670,13 @@ def clean_text_from_transcript(transcript_items) -> str:
     parts = []
 
     for item in transcript_items:
-        try:
-            t = item.text.strip()
-        except Exception:
-            t = str(item).strip()
+        if isinstance(item, dict):
+            t = str(item.get("text", "")).strip()
+        else:
+            try:
+                t = item.text.strip()
+            except Exception:
+                t = str(item).strip()
 
         if not t:
             continue
@@ -686,12 +689,12 @@ def clean_text_from_transcript(transcript_items) -> str:
     return normalize_spaces(text)
 
 
-@app.route("/", methods=["GET"])
+@app.get("/")
 def index():
     return render_template_string(HTML)
 
 
-@app.route("/extract", methods=["POST"])
+@app.post("/extract")
 def extract():
     try:
         data = request.get_json(force=True)
@@ -704,8 +707,7 @@ def extract():
         if not video_id:
             return jsonify({"ok": False, "error": "الرابط غير صحيح أو غير مدعوم"})
 
-        api = YouTubeTranscriptApi()
-        transcript = api.fetch(video_id, languages=["ar"])
+        transcript = YouTubeTranscriptApi.get_transcript(video_id, languages=["ar"])
         text = clean_text_from_transcript(transcript)
 
         if not text:
@@ -718,7 +720,7 @@ def extract():
         return jsonify({"ok": False, "error": str(e)})
 
 
-@app.route("/format", methods=["POST"])
+@app.post("/format")
 def format_route():
     try:
         data = request.get_json(force=True)
@@ -734,7 +736,7 @@ def format_route():
         return jsonify({"ok": False, "error": str(e)})
 
 
-@app.route("/summarize", methods=["POST"])
+@app.post("/summarize")
 def summarize_route():
     try:
         data = request.get_json(force=True)
@@ -752,7 +754,7 @@ def summarize_route():
         return jsonify({"ok": False, "error": str(e)})
 
 
-@app.route("/points", methods=["POST"])
+@app.post("/points")
 def points_route():
     try:
         data = request.get_json(force=True)
@@ -768,6 +770,11 @@ def points_route():
 
     except Exception as e:
         return jsonify({"ok": False, "error": str(e)})
+
+
+@app.get("/health")
+def health():
+    return {"ok": True, "status": "healthy"}
 
 
 if __name__ == "__main__":
