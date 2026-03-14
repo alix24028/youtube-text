@@ -2,6 +2,10 @@ import os
 import re
 import json
 import math
+import time
+import sqlite3
+import hashlib
+from datetime import datetime, timezone
 from urllib.parse import urlparse, parse_qs, quote
 from urllib.request import urlopen, Request
 from collections import Counter
@@ -9,6 +13,41 @@ from flask import Flask, request, jsonify, render_template_string
 from youtube_transcript_api import YouTubeTranscriptApi
 
 app = Flask(__name__)
+
+DB_PATH = "site_analytics.db"
+
+
+def init_db():
+    conn = sqlite3.connect(DB_PATH)
+    cur = conn.cursor()
+
+    cur.execute("""
+    CREATE TABLE IF NOT EXISTS visits (
+        id INTEGER PRIMARY KEY AUTOINCREMENT,
+        visitor_key TEXT,
+        ip TEXT,
+        country TEXT,
+        city TEXT,
+        path TEXT,
+        user_agent TEXT,
+        created_at TEXT
+    )
+    """)
+
+    cur.execute("""
+    CREATE TABLE IF NOT EXISTS ip_cache (
+        ip TEXT PRIMARY KEY,
+        country TEXT,
+        city TEXT,
+        updated_at INTEGER
+    )
+    """)
+
+    conn.commit()
+    conn.close()
+
+
+init_db()
 
 
 HTML = """
@@ -272,6 +311,32 @@ textarea{
   word-break:break-word;
 }
 
+.site-stats-grid{
+  display:grid;
+  grid-template-columns: repeat(3, minmax(140px, 1fr));
+  gap:10px;
+  margin-bottom:14px;
+}
+
+.country-list{
+  background:#fafafa;
+  border:1px solid #d1d5db;
+  border-radius:12px;
+  padding:12px;
+}
+
+.country-item{
+  display:flex;
+  justify-content:space-between;
+  gap:10px;
+  padding:8px 0;
+  border-bottom:1px solid #ececec;
+}
+
+.country-item:last-child{
+  border-bottom:none;
+}
+
 .footer-copy{
   text-align:center;
   margin-top:40px;
@@ -316,6 +381,10 @@ textarea{
   .stats-grid{
     grid-template-columns:1fr 1fr;
   }
+
+  .site-stats-grid{
+    grid-template-columns:1fr;
+  }
 }
 </style>
 </head>
@@ -330,6 +399,29 @@ textarea{
       © Ali M 2026
       <br>
       alix24028@gmail.com
+    </div>
+  </div>
+
+  <div class="box">
+    <h3>إحصائيات استخدام الرابط</h3>
+    <div class="site-stats-grid">
+      <div class="stat-card">
+        <div class="stat-label">إجمالي الزيارات</div>
+        <div id="siteTotalVisits" class="stat-value">0</div>
+      </div>
+      <div class="stat-card">
+        <div class="stat-label">الزوار الفريدون</div>
+        <div id="siteUniqueVisitors" class="stat-value">0</div>
+      </div>
+      <div class="stat-card">
+        <div class="stat-label">زيارات اليوم</div>
+        <div id="siteTodayVisits" class="stat-value">0</div>
+      </div>
+    </div>
+
+    <div class="country-list">
+      <div style="font-weight:bold; margin-bottom:8px;">أكثر الدول زيارة</div>
+      <div id="topCountriesBox">لا توجد بيانات بعد</div>
     </div>
   </div>
 
@@ -351,7 +443,7 @@ textarea{
   </div>
 
   <div class="box">
-    <h3>بيانات الفيديو وإحصائيات الرابط</h3>
+    <h3>بيانات الفيديو وإحصائيات النص</h3>
     <div class="meta-grid">
       <div class="thumb-box">
         <img id="videoThumb" src="" alt="صورة الفيديو" style="display:none;">
@@ -556,6 +648,37 @@ function updateVideoMeta(meta){
   }
 }
 
+function updateSiteStats(stats){
+  document.getElementById("siteTotalVisits").textContent = stats.total_visits || 0;
+  document.getElementById("siteUniqueVisitors").textContent = stats.unique_visitors || 0;
+  document.getElementById("siteTodayVisits").textContent = stats.today_visits || 0;
+
+  const box = document.getElementById("topCountriesBox");
+  const countries = stats.top_countries || [];
+
+  if(!countries.length){
+    box.innerHTML = "لا توجد بيانات بعد";
+    return;
+  }
+
+  box.innerHTML = countries.map(item => `
+    <div class="country-item">
+      <div>${item.country}</div>
+      <div>${item.count}</div>
+    </div>
+  `).join("");
+}
+
+async function loadSiteStats(){
+  try{
+    const res = await fetch("/stats");
+    const data = await res.json();
+    if(data.ok){
+      updateSiteStats(data);
+    }
+  }catch(e){}
+}
+
 async function extractText(){
   const url = document.getElementById("url").value.trim();
 
@@ -700,11 +823,96 @@ function clearAllData(){
   closeCopyPanel();
   setStatus("تم المسح");
 }
+
+window.addEventListener("load", loadSiteStats);
 </script>
 
 </body>
 </html>
 """
+
+
+def get_client_ip():
+    forwarded = request.headers.get("X-Forwarded-For", "")
+    if forwarded:
+        return forwarded.split(",")[0].strip()
+
+    real_ip = request.headers.get("X-Real-IP")
+    if real_ip:
+        return real_ip.strip()
+
+    return request.remote_addr or "0.0.0.0"
+
+
+def get_visitor_key(ip: str, user_agent: str) -> str:
+    raw = f"{ip}|{user_agent}"
+    return hashlib.sha256(raw.encode("utf-8")).hexdigest()
+
+
+def get_country_from_ip(ip: str):
+    if not ip or ip.startswith("127.") or ip == "0.0.0.0":
+        return ("محلي", "محلي")
+
+    now_ts = int(time.time())
+    conn = sqlite3.connect(DB_PATH)
+    cur = conn.cursor()
+
+    cur.execute("SELECT country, city, updated_at FROM ip_cache WHERE ip = ?", (ip,))
+    row = cur.fetchone()
+
+    if row:
+        country, city, updated_at = row
+        if now_ts - int(updated_at or 0) < 60 * 60 * 24 * 7:
+            conn.close()
+            return (country or "غير معروف", city or "")
+
+    conn.close()
+
+    try:
+        req = Request(
+            f"https://ipwho.is/{ip}",
+            headers={"User-Agent": "Mozilla/5.0"}
+        )
+        with urlopen(req, timeout=8) as response:
+            data = json.loads(response.read().decode("utf-8"))
+            country = data.get("country") or "غير معروف"
+            city = data.get("city") or ""
+    except Exception:
+        country = "غير معروف"
+        city = ""
+
+    conn = sqlite3.connect(DB_PATH)
+    cur = conn.cursor()
+    cur.execute("""
+        INSERT INTO ip_cache (ip, country, city, updated_at)
+        VALUES (?, ?, ?, ?)
+        ON CONFLICT(ip) DO UPDATE SET
+          country=excluded.country,
+          city=excluded.city,
+          updated_at=excluded.updated_at
+    """, (ip, country, city, now_ts))
+    conn.commit()
+    conn.close()
+
+    return (country, city)
+
+
+def record_visit(path="/"):
+    ip = get_client_ip()
+    user_agent = request.headers.get("User-Agent", "")
+    visitor_key = get_visitor_key(ip, user_agent)
+    country, city = get_country_from_ip(ip)
+    now_iso = datetime.now(timezone.utc).isoformat()
+
+    conn = sqlite3.connect(DB_PATH)
+    cur = conn.cursor()
+    cur.execute("""
+        INSERT INTO visits (visitor_key, ip, country, city, path, user_agent, created_at)
+        VALUES (?, ?, ?, ?, ?, ?, ?)
+    """, (visitor_key, ip, country, city, path, user_agent, now_iso))
+    conn.commit()
+    conn.close()
+
 
 def extract_video_id(url: str):
     url = url.strip()
@@ -749,10 +957,12 @@ def extract_video_id(url: str):
 
     return None
 
+
 def normalize_spaces(text: str) -> str:
     text = text.replace("\u200f", " ").replace("\u200e", " ")
     text = re.sub(r"\s+", " ", text)
     return text.strip()
+
 
 def split_into_word_chunks(text: str, words_per_chunk: int = 45):
     words = text.split()
@@ -765,10 +975,12 @@ def split_into_word_chunks(text: str, words_per_chunk: int = 45):
 
     return chunks
 
+
 def format_text_readable(text: str, words_per_paragraph: int = 45) -> str:
     text = normalize_spaces(text)
     chunks = split_into_word_chunks(text, words_per_paragraph)
     return "\n\n".join(chunks)
+
 
 def get_word_frequencies(text: str):
     stop_words = {
@@ -792,6 +1004,7 @@ def get_word_frequencies(text: str):
         cleaned.append(w)
 
     return Counter(cleaned)
+
 
 def summarize_by_chunks(text: str, max_chunks: int = 8, chunk_size: int = 55) -> str:
     text = normalize_spaces(text)
@@ -832,6 +1045,7 @@ def summarize_by_chunks(text: str, max_chunks: int = 8, chunk_size: int = 55) ->
 
     return "\n\n".join(item[2] for item in selected)
 
+
 def extract_key_points(text: str, points_count: int = 8, chunk_size: int = 28) -> str:
     text = normalize_spaces(text)
     chunks = split_into_word_chunks(text, chunk_size)
@@ -859,6 +1073,7 @@ def extract_key_points(text: str, points_count: int = 8, chunk_size: int = 28) -
 
     return "\n\n".join(lines)
 
+
 def clean_text_from_transcript(transcript_items) -> str:
     parts = []
 
@@ -881,6 +1096,7 @@ def clean_text_from_transcript(transcript_items) -> str:
     text = " ".join(parts)
     return normalize_spaces(text)
 
+
 def get_transcript_compat(video_id: str):
     if hasattr(YouTubeTranscriptApi, "get_transcript"):
         return YouTubeTranscriptApi.get_transcript(video_id, languages=["ar"])
@@ -891,9 +1107,11 @@ def get_transcript_compat(video_id: str):
 
     raise Exception("إصدار مكتبة youtube-transcript-api غير مدعوم في هذه البيئة")
 
+
 def get_video_metadata(url: str, video_id: str):
     title = "عنوان غير متوفر"
     author = ""
+
     try:
         oembed_url = "https://www.youtube.com/oembed?url=" + quote(url, safe="") + "&format=json"
         req = Request(oembed_url, headers={"User-Agent": "Mozilla/5.0"})
@@ -913,6 +1131,7 @@ def get_video_metadata(url: str, video_id: str):
         "video_id": video_id
     }
 
+
 def build_stats(text: str, meta: dict):
     words = text.split()
     word_count = len(words)
@@ -930,9 +1149,51 @@ def build_stats(text: str, meta: dict):
     })
     return meta
 
+
+def get_site_stats():
+    conn = sqlite3.connect(DB_PATH)
+    cur = conn.cursor()
+
+    cur.execute("SELECT COUNT(*) FROM visits")
+    total_visits = cur.fetchone()[0]
+
+    cur.execute("SELECT COUNT(DISTINCT visitor_key) FROM visits")
+    unique_visitors = cur.fetchone()[0]
+
+    today = datetime.now(timezone.utc).strftime("%Y-%m-%d")
+    cur.execute("SELECT COUNT(*) FROM visits WHERE substr(created_at, 1, 10) = ?", (today,))
+    today_visits = cur.fetchone()[0]
+
+    cur.execute("""
+        SELECT country, COUNT(*) as c
+        FROM visits
+        GROUP BY country
+        ORDER BY c DESC
+        LIMIT 10
+    """)
+    top_countries = [{"country": row[0] or "غير معروف", "count": row[1]} for row in cur.fetchall()]
+
+    conn.close()
+
+    return {
+        "ok": True,
+        "total_visits": total_visits,
+        "unique_visitors": unique_visitors,
+        "today_visits": today_visits,
+        "top_countries": top_countries
+    }
+
+
 @app.get("/")
 def index():
+    record_visit("/")
     return render_template_string(HTML)
+
+
+@app.get("/stats")
+def stats_route():
+    return jsonify(get_site_stats())
+
 
 @app.post("/extract")
 def extract():
@@ -962,6 +1223,7 @@ def extract():
     except Exception as e:
         return jsonify({"ok": False, "error": str(e)})
 
+
 @app.post("/format")
 def format_route():
     try:
@@ -976,6 +1238,7 @@ def format_route():
 
     except Exception as e:
         return jsonify({"ok": False, "error": str(e)})
+
 
 @app.post("/summarize")
 def summarize_route():
@@ -994,6 +1257,7 @@ def summarize_route():
     except Exception as e:
         return jsonify({"ok": False, "error": str(e)})
 
+
 @app.post("/points")
 def points_route():
     try:
@@ -1011,9 +1275,11 @@ def points_route():
     except Exception as e:
         return jsonify({"ok": False, "error": str(e)})
 
+
 @app.get("/health")
 def health():
     return {"ok": True, "status": "healthy"}
+
 
 if __name__ == "__main__":
     port = int(os.environ.get("PORT", 5000))
