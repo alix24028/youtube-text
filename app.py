@@ -1,6 +1,9 @@
 import os
 import re
-from urllib.parse import urlparse, parse_qs
+import json
+import math
+from urllib.parse import urlparse, parse_qs, quote
+from urllib.request import urlopen, Request
 from collections import Counter
 from flask import Flask, request, jsonify, render_template_string
 from youtube_transcript_api import YouTubeTranscriptApi
@@ -14,7 +17,7 @@ HTML = """
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
-<title>استخراج النص العربي من يوتيوب</title>
+<title>Ali M Tools - YouTube Arabic Extractor</title>
 
 <style>
 *{box-sizing:border-box}
@@ -40,7 +43,34 @@ body{
   box-shadow:0 2px 10px rgba(0,0,0,.08);
 }
 
-h1,h2,h3{margin-top:0}
+h1,h2,h3{
+  margin-top:0;
+}
+
+.top-brand{
+  text-align:center;
+  margin-bottom:25px;
+}
+
+.top-brand h2{
+  margin:0;
+  font-size:32px;
+  color:#111827;
+  font-weight:bold;
+}
+
+.top-brand .sub{
+  font-size:16px;
+  color:#6b7280;
+  margin-top:6px;
+}
+
+.top-brand .copy{
+  font-size:14px;
+  color:#6b7280;
+  margin-top:10px;
+  line-height:1.8;
+}
 
 h1{
   font-size:clamp(28px,5vw,44px);
@@ -182,6 +212,82 @@ textarea{
   margin-top:12px;
 }
 
+.meta-grid{
+  display:grid;
+  grid-template-columns: 280px 1fr;
+  gap:16px;
+  align-items:start;
+}
+
+.thumb-box{
+  background:#fafafa;
+  border:1px solid #d1d5db;
+  border-radius:14px;
+  padding:10px;
+}
+
+.thumb-box img{
+  width:100%;
+  height:auto;
+  border-radius:10px;
+  display:block;
+}
+
+.meta-title{
+  font-size:22px;
+  font-weight:bold;
+  margin-bottom:10px;
+  line-height:1.6;
+}
+
+.meta-sub{
+  color:#6b7280;
+  font-size:14px;
+  margin-bottom:10px;
+}
+
+.stats-grid{
+  display:grid;
+  grid-template-columns: repeat(2, minmax(140px, 1fr));
+  gap:10px;
+}
+
+.stat-card{
+  background:#fafafa;
+  border:1px solid #d1d5db;
+  border-radius:12px;
+  padding:12px;
+}
+
+.stat-label{
+  color:#6b7280;
+  font-size:13px;
+  margin-bottom:6px;
+}
+
+.stat-value{
+  color:#111827;
+  font-size:18px;
+  font-weight:bold;
+  word-break:break-word;
+}
+
+.footer-copy{
+  text-align:center;
+  margin-top:40px;
+  padding:20px;
+  color:#6b7280;
+  font-size:14px;
+  border-top:1px solid #e5e7eb;
+  line-height:1.8;
+}
+
+@media (max-width:850px){
+  .meta-grid{
+    grid-template-columns:1fr;
+  }
+}
+
 @media (max-width:700px){
   body{
     padding:12px;
@@ -206,12 +312,26 @@ textarea{
     min-height:240px;
     font-size:17px;
   }
+
+  .stats-grid{
+    grid-template-columns:1fr 1fr;
+  }
 }
 </style>
 </head>
 <body>
 
 <div class="container">
+
+  <div class="top-brand">
+    <h2>Ali M Tools</h2>
+    <div class="sub">YouTube Arabic Extractor</div>
+    <div class="copy">
+      © Ali M 2026
+      <br>
+      alix24028@gmail.com
+    </div>
+  </div>
 
   <div class="box">
     <h1>استخراج النص العربي من يوتيوب</h1>
@@ -228,6 +348,52 @@ textarea{
     </div>
 
     <div id="status" class="status">جاهز</div>
+  </div>
+
+  <div class="box">
+    <h3>بيانات الفيديو وإحصائيات الرابط</h3>
+    <div class="meta-grid">
+      <div class="thumb-box">
+        <img id="videoThumb" src="" alt="صورة الفيديو" style="display:none;">
+      </div>
+
+      <div>
+        <div id="videoTitle" class="meta-title">لم يتم استخراج بيانات الفيديو بعد</div>
+        <div id="videoSub" class="meta-sub"></div>
+
+        <div class="stats-grid">
+          <div class="stat-card">
+            <div class="stat-label">معرف الفيديو</div>
+            <div id="statVideoId" class="stat-value">—</div>
+          </div>
+
+          <div class="stat-card">
+            <div class="stat-label">عدد الكلمات</div>
+            <div id="statWords" class="stat-value">0</div>
+          </div>
+
+          <div class="stat-card">
+            <div class="stat-label">عدد الأحرف</div>
+            <div id="statChars" class="stat-value">0</div>
+          </div>
+
+          <div class="stat-card">
+            <div class="stat-label">عدد الفقرات</div>
+            <div id="statParagraphs" class="stat-value">0</div>
+          </div>
+
+          <div class="stat-card">
+            <div class="stat-label">وقت قراءة تقريبي</div>
+            <div id="statReadTime" class="stat-value">0 دقيقة</div>
+          </div>
+
+          <div class="stat-card">
+            <div class="stat-label">لغة النص</div>
+            <div id="statLang" class="stat-value">العربية</div>
+          </div>
+        </div>
+      </div>
+    </div>
   </div>
 
   <div class="box">
@@ -255,6 +421,12 @@ textarea{
       <button class="btn-gray" onclick="downloadBox('pointsBox','youtube_points.txt')">حفظ النقاط</button>
     </div>
     <textarea id="pointsBox" placeholder="ستظهر أهم النقاط هنا"></textarea>
+  </div>
+
+  <div class="footer-copy">
+    © Ali M 2026
+    <br>
+    alix24028@gmail.com
   </div>
 
 </div>
@@ -364,6 +536,26 @@ function downloadBox(id, filename){
   setStatus("تم حفظ الملف");
 }
 
+function updateVideoMeta(meta){
+  document.getElementById("videoTitle").textContent = meta.title || "عنوان غير متوفر";
+  document.getElementById("videoSub").textContent = meta.author ? ("القناة: " + meta.author) : "";
+
+  document.getElementById("statVideoId").textContent = meta.video_id || "—";
+  document.getElementById("statWords").textContent = meta.word_count || 0;
+  document.getElementById("statChars").textContent = meta.char_count || 0;
+  document.getElementById("statParagraphs").textContent = meta.paragraph_count || 0;
+  document.getElementById("statReadTime").textContent = (meta.read_time_minutes || 0) + " دقيقة";
+  document.getElementById("statLang").textContent = meta.language || "العربية";
+
+  const img = document.getElementById("videoThumb");
+  if(meta.thumbnail_url){
+    img.src = meta.thumbnail_url;
+    img.style.display = "block";
+  }else{
+    img.style.display = "none";
+  }
+}
+
 async function extractText(){
   const url = document.getElementById("url").value.trim();
 
@@ -391,6 +583,7 @@ async function extractText(){
     document.getElementById("mainText").value = data.text || "";
     document.getElementById("summaryBox").value = "";
     document.getElementById("pointsBox").value = "";
+    updateVideoMeta(data.meta || {});
     setStatus("تم استخراج النص بنجاح");
   }catch(e){
     setStatus("تعذر الاتصال بالخادم");
@@ -495,34 +688,20 @@ function clearAllData(){
   document.getElementById("mainText").value = "";
   document.getElementById("summaryBox").value = "";
   document.getElementById("pointsBox").value = "";
+  document.getElementById("videoTitle").textContent = "لم يتم استخراج بيانات الفيديو بعد";
+  document.getElementById("videoSub").textContent = "";
+  document.getElementById("statVideoId").textContent = "—";
+  document.getElementById("statWords").textContent = "0";
+  document.getElementById("statChars").textContent = "0";
+  document.getElementById("statParagraphs").textContent = "0";
+  document.getElementById("statReadTime").textContent = "0 دقيقة";
+  document.getElementById("statLang").textContent = "العربية";
+  document.getElementById("videoThumb").style.display = "none";
   closeCopyPanel();
   setStatus("تم المسح");
 }
 </script>
-<div class="container">
 
-<div style="
-text-align:center;
-margin-bottom:25px;
-">
-
-<h2 style="
-margin:0;
-font-size:28px;
-color:#111827;
-">
-Ali M Tools
-</h2>
-
-<div style="
-font-size:14px;
-color:#6b7280;
-margin-top:4px;
-">
-YouTube Arabic Extractor
-</div>
-
-</div>
 </body>
 </html>
 """
@@ -712,6 +891,45 @@ def get_transcript_compat(video_id: str):
 
     raise Exception("إصدار مكتبة youtube-transcript-api غير مدعوم في هذه البيئة")
 
+def get_video_metadata(url: str, video_id: str):
+    title = "عنوان غير متوفر"
+    author = ""
+    try:
+        oembed_url = "https://www.youtube.com/oembed?url=" + quote(url, safe="") + "&format=json"
+        req = Request(oembed_url, headers={"User-Agent": "Mozilla/5.0"})
+        with urlopen(req, timeout=10) as response:
+            data = json.loads(response.read().decode("utf-8"))
+            title = data.get("title") or title
+            author = data.get("author_name") or ""
+    except Exception:
+        pass
+
+    thumbnail_url = f"https://img.youtube.com/vi/{video_id}/hqdefault.jpg"
+
+    return {
+        "title": title,
+        "author": author,
+        "thumbnail_url": thumbnail_url,
+        "video_id": video_id
+    }
+
+def build_stats(text: str, meta: dict):
+    words = text.split()
+    word_count = len(words)
+    char_count = len(text)
+    paragraphs = [p for p in text.split("\n\n") if p.strip()]
+    paragraph_count = len(paragraphs)
+    read_time_minutes = max(1, math.ceil(word_count / 200)) if word_count else 0
+
+    meta.update({
+        "word_count": word_count,
+        "char_count": char_count,
+        "paragraph_count": paragraph_count,
+        "read_time_minutes": read_time_minutes,
+        "language": "العربية"
+    })
+    return meta
+
 @app.get("/")
 def index():
     return render_template_string(HTML)
@@ -736,7 +954,10 @@ def extract():
             return jsonify({"ok": False, "error": "تم العثور على النص لكن المحتوى فارغ"})
 
         pretty = format_text_readable(text, words_per_paragraph=45)
-        return jsonify({"ok": True, "text": pretty})
+        meta = get_video_metadata(url, video_id)
+        meta = build_stats(pretty, meta)
+
+        return jsonify({"ok": True, "text": pretty, "meta": meta})
 
     except Exception as e:
         return jsonify({"ok": False, "error": str(e)})
