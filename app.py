@@ -499,7 +499,30 @@ function clearAllData(){
   setStatus("تم المسح");
 }
 </script>
+<div class="container">
 
+<div style="
+text-align:center;
+margin-bottom:25px;
+">
+
+<h2 style="
+margin:0;
+font-size:28px;
+color:#111827;
+">
+Ali M Tools
+</h2>
+
+<div style="
+font-size:14px;
+color:#6b7280;
+margin-top:4px;
+">
+YouTube Arabic Extractor
+</div>
+
+</div>
 </body>
 </html>
 """
