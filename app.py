@@ -504,7 +504,6 @@ function clearAllData(){
 </html>
 """
 
-
 def extract_video_id(url: str):
     url = url.strip()
 
@@ -548,12 +547,10 @@ def extract_video_id(url: str):
 
     return None
 
-
 def normalize_spaces(text: str) -> str:
-    text = text.replace("\u200f", " ").replace("\u200e", " ")
-    text = re.sub(r"\s+", " ", text)
+    text = text.replace("\\u200f", " ").replace("\\u200e", " ")
+    text = re.sub(r"\\s+", " ", text)
     return text.strip()
-
 
 def split_into_word_chunks(text: str, words_per_chunk: int = 45):
     words = text.split()
@@ -566,12 +563,10 @@ def split_into_word_chunks(text: str, words_per_chunk: int = 45):
 
     return chunks
 
-
 def format_text_readable(text: str, words_per_paragraph: int = 45) -> str:
     text = normalize_spaces(text)
     chunks = split_into_word_chunks(text, words_per_paragraph)
-    return "\n\n".join(chunks)
-
+    return "\\n\\n".join(chunks)
 
 def get_word_frequencies(text: str):
     stop_words = {
@@ -584,7 +579,7 @@ def get_word_frequencies(text: str):
         "له", "منه", "منها", "انه", "إنه", "أنها", "انها"
     }
 
-    words = re.findall(r"[\u0600-\u06FFA-Za-z0-9_]+", text)
+    words = re.findall(r"[\\u0600-\\u06FFA-Za-z0-9_]+", text)
     cleaned = []
 
     for w in words:
@@ -596,7 +591,6 @@ def get_word_frequencies(text: str):
 
     return Counter(cleaned)
 
-
 def summarize_by_chunks(text: str, max_chunks: int = 8, chunk_size: int = 55) -> str:
     text = normalize_spaces(text)
     chunks = split_into_word_chunks(text, chunk_size)
@@ -605,18 +599,18 @@ def summarize_by_chunks(text: str, max_chunks: int = 8, chunk_size: int = 55) ->
         return ""
 
     if len(chunks) <= max_chunks:
-        return "\n\n".join(chunks)
+        return "\\n\\n".join(chunks)
 
     freqs = get_word_frequencies(text)
 
     if not freqs:
-        return "\n\n".join(chunks[:max_chunks])
+        return "\\n\\n".join(chunks[:max_chunks])
 
     scored = []
 
     for idx, chunk in enumerate(chunks):
         score = 0
-        words = re.findall(r"[\u0600-\u06FFA-Za-z0-9_]+", chunk)
+        words = re.findall(r"[\\u0600-\\u06FFA-Za-z0-9_]+", chunk)
         for w in words:
             score += freqs.get(w, 0)
 
@@ -634,8 +628,7 @@ def summarize_by_chunks(text: str, max_chunks: int = 8, chunk_size: int = 55) ->
     selected = scored[:max_chunks]
     selected.sort(key=lambda x: x[1])
 
-    return "\n\n".join(item[2] for item in selected)
-
+    return "\\n\\n".join(item[2] for item in selected)
 
 def extract_key_points(text: str, points_count: int = 8, chunk_size: int = 28) -> str:
     text = normalize_spaces(text)
@@ -649,7 +642,7 @@ def extract_key_points(text: str, points_count: int = 8, chunk_size: int = 28) -
 
     for idx, chunk in enumerate(chunks):
         score = 0
-        words = re.findall(r"[\u0600-\u06FFA-Za-z0-9_]+", chunk)
+        words = re.findall(r"[\\u0600-\\u06FFA-Za-z0-9_]+", chunk)
         for w in words:
             score += freqs.get(w, 0)
         scored.append((score, idx, chunk))
@@ -662,8 +655,7 @@ def extract_key_points(text: str, points_count: int = 8, chunk_size: int = 28) -
     for i, item in enumerate(selected, 1):
         lines.append(f"{i}- {item[2]}")
 
-    return "\n\n".join(lines)
-
+    return "\\n\\n".join(lines)
 
 def clean_text_from_transcript(transcript_items) -> str:
     parts = []
@@ -687,11 +679,20 @@ def clean_text_from_transcript(transcript_items) -> str:
     text = " ".join(parts)
     return normalize_spaces(text)
 
+def get_transcript_compat(video_id: str):
+    # يدعم الإصدارات القديمة والجديدة من المكتبة
+    if hasattr(YouTubeTranscriptApi, "get_transcript"):
+        return YouTubeTranscriptApi.get_transcript(video_id, languages=["ar"])
+
+    api = YouTubeTranscriptApi()
+    if hasattr(api, "fetch"):
+        return api.fetch(video_id, languages=["ar"])
+
+    raise Exception("إصدار مكتبة youtube-transcript-api غير مدعوم في هذه البيئة")
 
 @app.get("/")
 def index():
     return render_template_string(HTML)
-
 
 @app.post("/extract")
 def extract():
@@ -706,7 +707,7 @@ def extract():
         if not video_id:
             return jsonify({"ok": False, "error": "الرابط غير صحيح أو غير مدعوم"})
 
-        transcript = YouTubeTranscriptApi.get_transcript(video_id, languages=["ar"])
+        transcript = get_transcript_compat(video_id)
         text = clean_text_from_transcript(transcript)
 
         if not text:
@@ -717,7 +718,6 @@ def extract():
 
     except Exception as e:
         return jsonify({"ok": False, "error": str(e)})
-
 
 @app.post("/format")
 def format_route():
@@ -734,7 +734,6 @@ def format_route():
     except Exception as e:
         return jsonify({"ok": False, "error": str(e)})
 
-
 @app.post("/summarize")
 def summarize_route():
     try:
@@ -745,13 +744,12 @@ def summarize_route():
             return jsonify({"ok": False, "error": "لا يوجد نص لتلخيصه"})
 
         summary = summarize_by_chunks(text, max_chunks=8, chunk_size=55)
-        summary = "ملخص النص:\n\n" + format_text_readable(summary, words_per_paragraph=35)
+        summary = "ملخص النص:\\n\\n" + format_text_readable(summary, words_per_paragraph=35)
 
         return jsonify({"ok": True, "summary": summary})
 
     except Exception as e:
         return jsonify({"ok": False, "error": str(e)})
-
 
 @app.post("/points")
 def points_route():
@@ -763,18 +761,16 @@ def points_route():
             return jsonify({"ok": False, "error": "لا يوجد نص لاستخراج النقاط"})
 
         points = extract_key_points(text, points_count=8, chunk_size=28)
-        points = "أهم النقاط:\n\n" + points
+        points = "أهم النقاط:\\n\\n" + points
 
         return jsonify({"ok": True, "points": points})
 
     except Exception as e:
         return jsonify({"ok": False, "error": str(e)})
 
-
 @app.get("/health")
 def health():
     return {"ok": True, "status": "healthy"}
-
 
 if __name__ == "__main__":
     port = int(os.environ.get("PORT", 5000))
