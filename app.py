@@ -12,67 +12,7 @@ from collections import Counter
 from flask import Flask, request, jsonify, render_template_string
 from youtube_transcript_api import YouTubeTranscriptApi
 
-from flask import Flask, request, jsonify, render_template_string
-from flask_cors import CORS
-from urllib.parse import urlparse, parse_qs
-from youtube_transcript_api import YouTubeTranscriptApi
-
 app = Flask(__name__)
-CORS(app)
-
-# ===== أضف الكود بعد هذا السطر مباشرة =====
-
-def extract_video_id(url):
-    if "youtu.be/" in url:
-        return url.split("youtu.be/")[1].split("?")[0]
-
-    if "youtube.com" in url:
-        parsed = urlparse(url)
-        return parse_qs(parsed.query).get("v", [""])[0]
-
-    return url
-
-
-def build_points_and_summary(text):
-    sentences = [s.strip() for s in text.split(".") if s.strip()]
-
-    summary = ". ".join(sentences[:3])
-    if summary:
-        summary += "."
-
-    points = sentences[:5]
-
-    return points, summary
-
-
-@app.route("/youtube")
-def youtube():
-
-    url = request.args.get("url")
-
-    if not url:
-        return jsonify({"error": "missing url"}), 400
-
-    video_id = extract_video_id(url)
-
-    try:
-        transcript = YouTubeTranscriptApi.get_transcript(
-            video_id,
-            languages=["ar","en"]
-        )
-
-        text = " ".join([x["text"] for x in transcript])
-
-        points, summary = build_points_and_summary(text)
-
-        return jsonify({
-            "text": text,
-            "summary": summary,
-            "points": points
-        })
-
-    except Exception as e:
-        return jsonify({"error": str(e)}), 500
 
 DB_PATH = "site_analytics.db"
 
